@@ -1,0 +1,11 @@
+{
+  "name": "Mi Armario Inteligente",
+  "short_name": "Mi Armario",
+  "lang": "es",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f5f0ea",
+  "theme_color": "#f5f0ea",
+  "description": "Organiza tus prendas y crea looks en privado."
+}
