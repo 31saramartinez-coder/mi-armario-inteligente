@@ -37,7 +37,38 @@ $('form').addEventListener('submit',async e=>{e.preventDefault();let old=editing
 async function removeItem(id){if(!confirm('¿Eliminar esta prenda del armario?'))return;await store('readwrite',s=>s.delete(id));items=items.filter(p=>p.id!==id);refresh()}
 const neutrals=['Negro','Blanco','Beige','Marrón','Gris','Azul marino'];
 function matchesSeason(p,w){return w==='Todo el año'||p.season==='Todo el año'||p.season===w}
-function makeSuggestion(){let style=$('wantStyle').value,season=$('wantSeason').value;let pool=items.filter(p=>(style==='Me da igual'||p.style==='Ambos'||p.style===style)&&matchesSeason(p,season));let pick=a=>a.length?a[Math.floor(Math.random()*a.length)]:null;let top=pick(pool.filter(p=>p.category==='Parte de arriba')),bottoms=pool.filter(p=>p.category==='Parte de abajo'),bottom=pick(bottoms),dress=pick(pool.filter(p=>p.category==='Vestido / Mono'));if(top&&bottom&&!((top.color===bottom.color)||neutrals.includes(top.color)||neutrals.includes(bottom.color))){bottom=bottoms.find(p=>p.color===top.color||neutrals.includes(p.color)||neutrals.includes(top.color))||bottom}let chosen=dress?[dress]:[top,bottom].filter(Boolean);let shoes=pick(pool.filter(p=>p.category==='Calzado'));if(shoes)chosen.push(shoes);let coat=pick(pool.filter(p=>p.category==='Abrigo'));if(coat&&['Otoño','Invierno'].includes(season))chosen.push(coat);selectedSuggestion=chosen.map(p=>p.id);$('suggestion').innerHTML=chosen.length?'<div class="panel"><div class="eyebrow">Propuesta de conjunto</div><div class="grid">'+chosen.map(p=>tile(p,false)).join('')+'</div><p class="muted">Puedes guardar este conjunto o seguir probando otras combinaciones.</p><div class="row"><button class="btn" onclick="saveSuggestion()">Guardar look</button><button class="btn light" onclick="makeSuggestion()">Probar otro</button></div></div>':'<div class="panel empty"><span>🪄</span>Añade al menos una parte de arriba y una de abajo, o un vestido, para recibir sugerencias.</div>'}
+function makeSuggestion(){
+let season=$('wantSeason').value,occasion=$('wantOccasion').value;
+let allowed=occasion==='Deporte'?['Deportivo','Versátil','Ambos']:occasion==='Oficina'||occasion==='Elegante'||occasion==='Fiesta'?['Elegante','Formal','Versátil','Ambos']:['Casual','Versátil','Ambos'];
+let pool=items.filter(p=>matchesSeason(p,season)&&allowed.includes(p.style)&&(occasion==='Deporte'||(p.category!=='Ropa deportiva'&&p.style!=='Deportivo')));
+let pick=a=>a.length?a[Math.floor(Math.random()*a.length)]:null;
+let dresses=pool.filter(p=>p.category==='Vestido / Mono'),tops=pool.filter(p=>p.category==='Parte de arriba'),bottoms=pool.filter(p=>p.category==='Parte de abajo');
+let chosen=[],dress=pick(dresses);
+if(dress)chosen=[dress];
+else{
+ let top=pick(tops),bottom=null;
+ if(top){
+  let candidates=bottoms.filter(b=>{
+   let topSport=top.style==='Deportivo'||top.category==='Ropa deportiva',bottomSport=b.style==='Deportivo'||b.category==='Ropa deportiva';
+   if(topSport!==bottomSport)return false;
+   let topPattern=top.print&&top.print!=='Liso',bottomPattern=b.print&&b.print!=='Liso';
+   if(topPattern&&bottomPattern)return false;
+   let tc=[top.color,top.color2].filter(Boolean),bc=[b.color,b.color2].filter(Boolean);
+   return tc.some(c=>bc.includes(c)||['Negro','Blanco','Marfil','Beige','Crudo','Gris','Azul marino'].includes(c))||bc.some(c=>['Negro','Blanco','Marfil','Beige','Crudo','Gris','Azul marino'].includes(c));
+  });
+  bottom=pick(candidates);
+  if(bottom)chosen=[top,bottom];
+ }
+}
+if(occasion==='Deporte'&&!chosen.length){let active=pick(pool.filter(p=>p.category==='Ropa deportiva'));if(active)chosen=[active]}
+let shoesPool=pool.filter(p=>p.category==='Calzado');
+if(occasion==='Deporte')shoesPool=shoesPool.filter(p=>/zapatill|deportiv|running|sport/i.test(p.name+' '+p.notes+' '+p.style));
+else shoesPool=shoesPool.filter(p=>!/botas de montaña|zapatilla deportiva|running|sport/i.test(p.name+' '+p.notes));
+let shoes=pick(shoesPool);if(shoes&&chosen.length)chosen.push(shoes);
+let coats=pool.filter(p=>p.category==='Abrigo');if(['Otoño','Invierno'].includes(season)&&chosen.length){let coat=pick(coats);if(coat)chosen.push(coat)}
+selectedSuggestion=chosen.map(p=>p.id);
+$('suggestion').innerHTML=chosen.length?'<div class="panel"><div class="eyebrow">Propuesta · '+safe(occasion)+'</div><div class="grid">'+chosen.map(p=>tile(p,false)).join('')+'</div><p class="muted">He priorizado prendas de la misma ocasión y estilo, y he evitado mezclar estampados protagonistas. La compatibilidad depende también de las notas y el nombre que añadas a cada prenda.</p><div class="row"><button class="btn" onclick="saveSuggestion()">Guardar look</button><button class="btn light" onclick="makeSuggestion()">Probar otro</button></div></div>':'<div class="panel empty"><span>🪄</span>No encuentro prendas suficientes y compatibles para esta ocasión. Añade más prendas de ese estilo o prueba otra ocasión.</div>';
+}
 function saveSuggestion(){if(!selectedSuggestion.length)return;let a=JSON.parse(localStorage.getItem('armarioLooks')||'[]');a.unshift({ids:selectedSuggestion,date:new Date().toLocaleDateString('es-ES')});localStorage.setItem('armarioLooks',JSON.stringify(a));refresh();alert('Look guardado en tu colección.')}
 function renderSaved(){let a=JSON.parse(localStorage.getItem('armarioLooks')||'[]');$('savedLooks').innerHTML=a.length?a.map((l,i)=>'<div class="lookitem"><div style="flex:1"><strong>Look '+(a.length-i)+'</strong><div class="meta">'+safe(l.date)+' · '+l.ids.length+' prendas</div></div><button class="btn red" onclick="deleteLook('+i+')">Borrar</button></div>'+l.ids.map(id=>items.find(p=>p.id===id)).filter(Boolean).map(p=>'<div class="lookitem"><img src="'+p.photo+'"><div><strong>'+safe(p.name)+'</strong><div class="meta">'+safe(p.category)+'</div></div></div>').join('')).join(''):'Todavía no has guardado ningún look.'}
 function deleteLook(i){let a=JSON.parse(localStorage.getItem('armarioLooks')||'[]');a.splice(i,1);localStorage.setItem('armarioLooks',JSON.stringify(a));refresh()}
