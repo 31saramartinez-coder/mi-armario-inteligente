@@ -44,11 +44,41 @@ async function analyzeGarment(){
   let found=null;for(const rule of rules){if(rule[0].test(labels)){found=rule;break}}
   if(found){$('category').value=found[1];if(!$('name').value.trim())$('name').value=found[2]}
   if(/running shoe|sneaker|jersey|sweatshirt/i.test(labels))$('style').value='Deportivo';
-  const c=document.createElement('canvas');c.width=48;c.height=48;const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(im,0,0,48,48);const d=ctx.getImageData(0,0,48,48).data;let rr=0,gg=0,bb=0,n=0;for(let y=8;y<40;y++)for(let x=8;x<40;x++){let i=(y*48+x)*4;rr+=d[i];gg+=d[i+1];bb+=d[i+2];n++}rr/=n;gg/=n;bb/=n;
-  const mx=Math.max(rr,gg,bb),delta=mx-Math.min(rr,gg,bb),sat=mx?delta/mx:0;let hue=0;if(delta){if(mx===rr)hue=60*(((gg-bb)/delta)%6);else if(mx===gg)hue=60*((bb-rr)/delta+2);else hue=60*((rr-gg)/delta+4);if(hue<0)hue+=360}
-  let color;if(mx<55)color='Negro';else if(sat<.13)color=mx>218?'Blanco':mx>165?'Beige':mx>105?'Gris':'Gris marengo';else if(sat<.28&&mx>145)color=mx>205?'Crudo':mx>175?'Beige':'Topo';else if(hue<12||hue>=345)color='Rojo';else if(hue<25)color=mx<145?'Chocolate':'Naranja';else if(hue<42)color=mx<135?'Marrón':'Mostaza';else if(hue<68)color='Amarillo';else if(hue<155)color='Verde';else if(hue<190)color='Turquesa';else if(hue<255)color='Azul';else if(hue<290)color='Morado';else if(hue<330)color='Rosa';else color='Burdeos';
-  const colorSelect=$('color');const exact=[...colorSelect.options].find(o=>o.text===color);if(exact)colorSelect.value=exact.value;else if(color==='Chocolate')colorSelect.value='Chocolate';else if(color==='Gris marengo')colorSelect.value='Gris marengo';else if(color==='Topo')colorSelect.value='Topo';else if(color==='Crudo')colorSelect.value='Crudo';else if(color==='Mostaza')colorSelect.value='Mostaza';else if(color==='Naranja')colorSelect.value='Naranja';else if(color==='Burdeos')colorSelect.value='Burdeos';
-  status.textContent='Color detectado: '+color+'. He actualizado el campo «Color». Sugerencias: '+preds.slice(0,3).map(p=>p.className+' ('+Math.round(p.probability*100)+'%)').join(' · ')+'. Revisa los campos: el modelo general puede confundir prendas y el color es aproximado.';
+  // Detecta el tono dominante por píxeles, en vez de promediar RGB (que suele convertir mezclas en gris).
+  const c=document.createElement('canvas');c.width=64;c.height=64;
+  const ctx=c.getContext('2d',{willReadFrequently:true});ctx.drawImage(im,0,0,64,64);
+  const d=ctx.getImageData(0,0,64,64).data;
+  const hueBins=new Array(24).fill(0);let chromaticWeight=0,totalWeight=0,lightSum=0,blueWeight=0;
+  for(let y=7;y<57;y++)for(let x=7;x<57;x++){
+   const i=(y*64+x)*4,r=d[i]/255,g=d[i+1]/255,b=d[i+2]/255;
+   const mx=Math.max(r,g,b),mn=Math.min(r,g,b),delta=mx-mn,sat=mx?delta/mx:0;
+   totalWeight+=1;lightSum+=mx;
+   if(sat<.16||mx<.12)continue;
+   let h=0;
+   if(delta){if(mx===r)h=60*(((g-b)/delta)%6);else if(mx===g)h=60*((b-r)/delta+2);else h=60*((r-g)/delta+4);if(h<0)h+=360}
+   const weight=sat*Math.sqrt(mx);
+   hueBins[Math.floor(h/15)%24]+=weight;chromaticWeight+=weight;
+   if(h>=190&&h<260)blueWeight+=weight;
+  }
+  const dominantBin=hueBins.indexOf(Math.max(...hueBins)),dominantHue=dominantBin*15+7.5;
+  const avgLight=lightSum/totalWeight,chromaticRatio=chromaticWeight/totalWeight;
+  const denimHint=/\bjean\b|denim/i.test(labels);
+  let color;
+  if(chromaticRatio<.13)color=avgLight<.20?'Negro':avgLight>.82?'Blanco':avgLight>.62?'Beige':avgLight>.40?'Gris':'Gris marengo';
+  else if(dominantHue<12||dominantHue>=345)color='Rojo';
+  else if(dominantHue<25)color=avgLight<.42?'Chocolate':'Naranja';
+  else if(dominantHue<42)color=avgLight<.48?'Marrón':'Mostaza';
+  else if(dominantHue<68)color='Amarillo';
+  else if(dominantHue<155)color='Verde';
+  else if(dominantHue<190)color='Turquesa';
+  else if(dominantHue<255)color=(avgLight<.30?'Azul marino':'Azul');
+  else if(dominantHue<290)color='Morado';
+  else if(dominantHue<330)color='Rosa';
+  else color='Burdeos';
+  // Si el clasificador reconoce claramente denim y el análisis de píxeles encuentra azul, prioriza Azul.
+  if(denimHint&&blueWeight>0&&blueWeight>=chromaticWeight*.28)color=avgLight<.30?'Azul marino':'Azul';
+  const colorSelect=$('color');const exact=[...colorSelect.options].find(o=>o.text===color);if(exact)colorSelect.value=exact.value;
+  status.textContent='Color estimado: '+color+'. He actualizado el campo «Color» usando el tono dominante de la foto, no el promedio. '+(denimHint?'El reconocimiento también ha detectado denim/vaqueros. ':'')+'Sugerencias: '+preds.slice(0,3).map(p=>p.className+' ('+Math.round(p.probability*100)+'%)').join(' · ')+'. El resultado sigue siendo orientativo: revisa el color si la luz o el fondo alteran la foto.';
  }catch(e){status.textContent=e.message||'No se ha podido analizar la imagen.'}finally{btn.disabled=false}
 }
 function applyCrop(){croppedData=$('cropCanvas').toDataURL('image/jpeg',.88);$('preview').src=croppedData;$('preview').hidden=false;$('cropPanel').hidden=true;$('analyzeBtn').disabled=false;$('analysisStatus').textContent='Foto lista. Pulsa Analizar foto automáticamente.'}
