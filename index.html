@@ -62,6 +62,7 @@ async function analyzeGarment(){
   }
   const dominantBin=hueBins.indexOf(Math.max(...hueBins)),dominantHue=dominantBin*15+7.5;
   const avgLight=lightSum/totalWeight,chromaticRatio=chromaticWeight/totalWeight;
+  const blueDenimHint=/blue\s+jean|blue\s+denim/i.test(labels);
   const denimHint=/\bjean\b|denim/i.test(labels);
   let color;
   if(chromaticRatio<.13)color=avgLight<.20?'Negro':avgLight>.82?'Blanco':avgLight>.62?'Beige':avgLight>.40?'Gris':'Gris marengo';
@@ -76,7 +77,8 @@ async function analyzeGarment(){
   else if(dominantHue<330)color='Rosa';
   else color='Burdeos';
   // Si el clasificador reconoce claramente denim y el análisis de píxeles encuentra azul, prioriza Azul.
-  if(denimHint&&blueWeight>0&&blueWeight>=chromaticWeight*.28)color=avgLight<.30?'Azul marino':'Azul';
+  if(blueDenimHint)color='Azul';
+  else if(denimHint&&blueWeight>0&&blueWeight>=chromaticWeight*.18)color=avgLight<.30?'Azul marino':'Azul';
   const colorSelect=$('color');const exact=[...colorSelect.options].find(o=>o.text===color);if(exact)colorSelect.value=exact.value;
   status.textContent='Color estimado: '+color+'. He actualizado el campo «Color» usando el tono dominante de la foto, no el promedio. '+(denimHint?'El reconocimiento también ha detectado denim/vaqueros. ':'')+'Sugerencias: '+preds.slice(0,3).map(p=>p.className+' ('+Math.round(p.probability*100)+'%)').join(' · ')+'. El resultado sigue siendo orientativo: revisa el color si la luz o el fondo alteran la foto.';
  }catch(e){status.textContent=e.message||'No se ha podido analizar la imagen.'}finally{btn.disabled=false}
