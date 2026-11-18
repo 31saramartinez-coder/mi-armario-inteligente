@@ -91,6 +91,20 @@ $('form').addEventListener('submit',async e=>{e.preventDefault();let old=editing
 async function removeItem(id){if(!confirm('¿Eliminar esta prenda del armario?'))return;await store('readwrite',s=>s.delete(id));items=items.filter(p=>p.id!==id);refresh()}
 const neutrals=['Negro','Blanco','Beige','Marrón','Gris','Azul marino'];
 function matchesSeason(p,w){return w==='Todo el año'||p.season==='Todo el año'||p.season===w}
+function pickVaried(list,key){
+ if(!list.length)return null;
+ if(list.length===1)return list[0];
+ let storageKey='armarioRecentPicks_'+key,history=[];
+ try{history=JSON.parse(localStorage.getItem(storageKey)||'[]');if(!Array.isArray(history))history=[]}catch(e){history=[]}
+ const ids=new Set(list.map(p=>p.id));
+ let recent=history.filter(id=>ids.has(id));
+ let available=list.filter(p=>!recent.includes(p.id));
+ while(!available.length&&recent.length){recent.shift();available=list.filter(p=>!recent.includes(p.id))}
+ const choice=available[Math.floor(Math.random()*available.length)];
+ history.push(choice.id);
+ try{localStorage.setItem(storageKey,JSON.stringify(history.slice(-40)))}catch(e){}
+ return choice;
+}
 function makeSuggestion(){
 let season=$('wantSeason').value,occasion=$('wantOccasion').value;
 let allowed=occasion==='Deporte'?['Deportivo','Versátil','Ambos']:occasion==='Oficina'||occasion==='Elegante'||occasion==='Fiesta'?['Elegante','Formal','Versátil','Ambos']:['Casual','Versátil','Ambos'];
@@ -110,7 +124,7 @@ else{
    let tc=[top.color,top.color2].filter(Boolean),bc=[b.color,b.color2].filter(Boolean);
    return tc.some(c=>bc.includes(c)||['Negro','Blanco','Marfil','Beige','Crudo','Gris','Azul marino'].includes(c))||bc.some(c=>['Negro','Blanco','Marfil','Beige','Crudo','Gris','Azul marino'].includes(c));
   });
-  bottom=pick(candidates);
+  bottom=pickVaried(candidates,occasion+'_'+season);
   if(bottom)chosen=[top,bottom];
  }
 }
@@ -121,7 +135,7 @@ else shoesPool=shoesPool.filter(p=>!/botas de montaña|zapatilla deportiva|runni
 let shoes=pick(shoesPool);if(shoes&&chosen.length)chosen.push(shoes);
 let coats=pool.filter(p=>p.category==='Abrigo');if(['Otoño','Invierno'].includes(season)&&chosen.length){let coat=pick(coats);if(coat)chosen.push(coat)}
 selectedSuggestion=chosen.map(p=>p.id);
-$('suggestion').innerHTML=chosen.length?'<div class="panel"><div class="eyebrow">Propuesta · '+safe(occasion)+'</div><div class="grid">'+chosen.map(p=>tile(p,false)).join('')+'</div><p class="muted">He priorizado prendas de la misma ocasión y estilo, y he evitado mezclar estampados protagonistas. La compatibilidad depende también de las notas y el nombre que añadas a cada prenda.</p><div class="row"><button class="btn" onclick="saveSuggestion()">Guardar look</button><button class="btn light" onclick="makeSuggestion()">Probar otro</button></div></div>':'<div class="panel empty"><span>🪄</span>No encuentro prendas suficientes y compatibles para esta ocasión. Añade más prendas de ese estilo o prueba otra ocasión.</div>';
+$('suggestion').innerHTML=chosen.length?'<div class="panel"><div class="eyebrow">Propuesta · '+safe(occasion)+'</div><div class="grid">'+chosen.map(p=>tile(p,false)).join('')+'</div><p class="muted">He priorizado prendas de la misma ocasión y estilo, he evitado mezclar estampados protagonistas e intento alternar los pantalones compatibles para no repetir siempre el mismo. La compatibilidad depende de las características que hayas indicado.</p><div class="row"><button class="btn" onclick="saveSuggestion()">Guardar look</button><button class="btn light" onclick="makeSuggestion()">Probar otro</button></div></div>':'<div class="panel empty"><span>🪄</span>No encuentro prendas suficientes y compatibles para esta ocasión. Añade más prendas de ese estilo o prueba otra ocasión.</div>';
 }
 function saveSuggestion(){if(!selectedSuggestion.length)return;let a=JSON.parse(localStorage.getItem('armarioLooks')||'[]');a.unshift({ids:selectedSuggestion,date:new Date().toLocaleDateString('es-ES')});localStorage.setItem('armarioLooks',JSON.stringify(a));refresh();alert('Look guardado en tu colección.')}
 function renderSaved(){let a=JSON.parse(localStorage.getItem('armarioLooks')||'[]');$('savedLooks').innerHTML=a.length?a.map((l,i)=>'<div class="lookitem"><div style="flex:1"><strong>Look '+(a.length-i)+'</strong><div class="meta">'+safe(l.date)+' · '+l.ids.length+' prendas</div></div><button class="btn red" onclick="deleteLook('+i+')">Borrar</button></div>'+l.ids.map(id=>items.find(p=>p.id===id)).filter(Boolean).map(p=>'<div class="lookitem"><img src="'+p.photo+'"><div><strong>'+safe(p.name)+'</strong><div class="meta">'+safe(p.category)+'</div></div></div>').join('')).join(''):'Todavía no has guardado ningún look.'}
